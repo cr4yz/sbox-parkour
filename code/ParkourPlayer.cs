@@ -52,7 +52,7 @@ namespace Facepunch.Parkour
 			var controller = Controller as ParkourController;
 			var wishSpd = controller.GetWishSpeed();
 			var bobSpeed = controller.Duck.IsActive ? 10f : 25f;
-			if ( controller.Duck.Sliding ) bobSpeed = 0;
+			if ( controller.Duck.Sliding ) bobSpeed = 2;
 
 			var bobSpeedAlpha = Velocity.Length.LerpInverse( 0, wishSpd );
 			var forwardspeed = Velocity.Normal.Dot( setup.Rotation.Forward );
@@ -65,8 +65,8 @@ namespace Facepunch.Parkour
 				walkBob += Time.Delta * bobSpeed * bobSpeedAlpha;
 			}
 
-			setup.Position += up * MathF.Sin( walkBob ) * bobSpeedAlpha * 2;
-			setup.Position += left * MathF.Sin( walkBob * 0.6f ) * bobSpeedAlpha * 1;
+			setup.Position += up * MathF.Sin( walkBob ) * bobSpeedAlpha * 3;
+			setup.Position += left * MathF.Sin( walkBob * 0.6f ) * bobSpeedAlpha * 2;
 
 			// Camera lean
 			lean = lean.LerpTo( Velocity.Dot( setup.Rotation.Right ) * 0.03f, Time.Delta * 15.0f );

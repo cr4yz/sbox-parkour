@@ -1,13 +1,12 @@
 
-
-text.title
-{
-	font-family: Poppins;
-	font-size: 50px;
-	font-weight: 900;
-	color: white;
-	position: absolute;
-	left: 100px;
-	top: 100px;
-	text-shadow: 5px 5px 50px rgba( black, 0.8 );
+text.speedometer {
+    font-family: Poppins;
+    font-size: 50px;
+    font-weight: 900;
+    color: white;
+    position: absolute;
+    bottom: 12%;
+    left: 50%;
+    transform: translateX(-50%);
+    text-shadow: 5px 5px 50px rgba( black, 0.8 );
 }
