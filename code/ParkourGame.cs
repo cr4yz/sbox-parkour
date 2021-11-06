@@ -12,6 +12,16 @@ namespace Facepunch.Parkour
 			}
 		}
 
+		public override void DoPlayerSuicide( Client cl )
+		{
+			base.DoPlayerSuicide( cl );
+
+			var player = new ParkourPlayer();
+			cl.Pawn = player;
+
+			player.Respawn();
+		}
+
 		public override void ClientJoined( Client client )
 		{
 			base.ClientJoined( client );
