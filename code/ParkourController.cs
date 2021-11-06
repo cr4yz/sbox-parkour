@@ -237,7 +237,7 @@ namespace Facepunch.Parkour
 
 			SaveGroundPos();
 
-			if ( Host.IsServer )
+			if ( Debug && Pawn.IsLocalPawn )
 			{
 				DebugOverlay.Box( Position + TraceOffset, mins, maxs, Color.Red );
 				DebugOverlay.Box( Position, mins, maxs, Color.Blue );
@@ -271,14 +271,27 @@ namespace Facepunch.Parkour
 		private float _accel;
 		public virtual void WalkMove()
 		{
-			if ( Duck.Sliding )
-				WishVelocity = Vector3.Zero;
-
 			var wishdir = WishVelocity.Normal;
 			var wishspeed = WishVelocity.Length;
 
 			WishVelocity = WishVelocity.WithZ( 0 );
 			WishVelocity = WishVelocity.Normal * wishspeed;
+
+			if ( Duck.Sliding )
+			{
+				if ( GroundNormal.z < 1 )
+				{
+					var slopeDir = Vector3.Cross( Vector3.Up, Vector3.Cross( Vector3.Up, GroundNormal ) );
+					var dot = Vector3.Dot( Velocity.Normal, slopeDir );
+					var slopeForward = Vector3.Cross( GroundNormal, Pawn.Rotation.Right );
+					var spdGain = 100f.LerpTo( 500f, 1f - GroundNormal.z );
+
+					if ( dot > 0 )
+						spdGain *= -1;
+
+					Velocity += spdGain * slopeForward * Time.Delta;
+				}
+			}
 
 			var accel = Duck.IsActive && !Duck.Sliding ? DuckAcceleration : Acceleration;
 
@@ -740,6 +753,19 @@ namespace Facepunch.Parkour
 				return;
 
 			//GroundTransform = GroundEntity.Transform.ToLocal( new Transform( Pos, Rot ) );
+		}
+
+		private Vector3 ClipVelocity( Vector3 input, Vector3 normal, float overbounce )
+		{
+			var backoff = Vector3.Dot( input, normal ) * overbounce;
+
+			for ( int i = 0; i < 3; i++ )
+			{
+				var change = normal[i] * backoff;
+				input[i] -= change;
+			}
+
+			return input;
 		}
 
 	}
