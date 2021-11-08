@@ -5,9 +5,10 @@ namespace Facepunch.Parkour
     class ParkourCamera : Camera
 	{
 
-		Vector3 lastPos;
-		float minFov => 100;
-		float maxFov => 115;
+		private Vector3 _lastPos;
+		private float _targetFov;
+		private float _minFov => 100;
+		private float _maxFov => 115;
 
 		public override void Activated()
 		{
@@ -17,7 +18,7 @@ namespace Facepunch.Parkour
 			Position = pawn.EyePos;
 			Rotation = pawn.EyeRot;
 
-			lastPos = Position;
+			_lastPos = Position;
 		}
 
 		public override void Update()
@@ -28,16 +29,17 @@ namespace Facepunch.Parkour
 			var controller = pawn.Controller as ParkourController;
 			var eyePos = pawn.EyePos;
 
-			Position = eyePos.WithZ( lastPos.z.LerpTo( eyePos.z, 50f * Time.Delta ) );
+			Position = eyePos.WithZ( _lastPos.z.LerpTo( eyePos.z, 50f * Time.Delta ) );
 			//Position = eyePos;
 			Rotation = pawn.EyeRot;
 
 			Viewer = pawn;
-			lastPos = Position;
+			_lastPos = Position;
 
 			var spdA = controller.Velocity.WithZ(0).Length / controller.DefaultSpeed;
 
-			FieldOfView = minFov.LerpTo( maxFov, spdA * spdA * spdA * spdA );
+			_targetFov = _minFov.LerpTo( _maxFov, spdA * spdA * spdA * spdA );
+			FieldOfView = FieldOfView.LerpTo( _targetFov, Time.Delta * 10 );
 		}
 
 	}
