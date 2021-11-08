@@ -293,6 +293,7 @@ namespace Facepunch.Parkour
 			StayOnGround();
 		}
 
+		private float _prevSpd;
 		private void DoMomentum()
 		{
 			if ( WishVelocity.IsNearZeroLength )
@@ -304,9 +305,9 @@ namespace Facepunch.Parkour
 				return;
 			}
 
-			var spd = Velocity.Length;
-			var prevSpd = _previousVelocity.WithZ( 0 ).Length;
-			var lossFactor = spd / prevSpd;
+			var spd = Velocity.WithZ(0).Length;
+			var lossFactor = spd / _prevSpd;
+			_prevSpd = spd;
 
 			if ( lossFactor < 1 )
 			{
@@ -317,6 +318,24 @@ namespace Facepunch.Parkour
 				if ( Velocity.Length < GetWishSpeed() )
 					_momentum += Time.Delta * MomentumGain;
 			}
+		}
+
+		private void CheckFallDamage()
+		{
+			var grounded = GroundEntity != null;
+			var justLanded = !_wasGrounded && grounded;
+			_wasGrounded = grounded;
+
+			if ( !justLanded )
+				return;
+
+			var willSlide = Input.Down( InputButton.Duck ) && Velocity.WithZ( 0 ).Length > SlideThreshold;
+			var fallSpeed = Math.Abs( _previousVelocity.z );
+			var fallSpeedMaxLoss = willSlide ? 5000 : 2000;
+			var a = 1f - MathF.Min( fallSpeed / fallSpeedMaxLoss, 1 );
+
+			Velocity = Velocity.ClampLength( Velocity.Length * a );
+			_momentum *= a;
 		}
 
 		public virtual void StepMove()
@@ -608,24 +627,6 @@ namespace Facepunch.Parkour
 			{
 				BaseVelocity = GroundEntity.Velocity;
 			}
-		}
-
-		private void CheckFallDamage()
-		{
-			var grounded = GroundEntity != null;
-			var justLanded = !_wasGrounded && grounded;
-			_wasGrounded = grounded;
-
-			if ( !justLanded )
-				return;
-
-			var willSlide = Input.Down( InputButton.Duck ) && Velocity.WithZ( 0 ).Length > SlideThreshold;
-			var fallSpeed = Math.Abs(_previousVelocity.z);
-			var fallSpeedMaxLoss = willSlide ? 5000 : 2000;
-			var a = 1f - MathF.Min(fallSpeed / fallSpeedMaxLoss, 1);
-
-			Velocity = Velocity.ClampLength( Velocity.Length * a );
-			_momentum *= a * .75f;
 		}
 
 		/// <summary>
