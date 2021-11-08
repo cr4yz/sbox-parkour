@@ -239,9 +239,6 @@ namespace Facepunch.Parkour
 			if ( GroundEntity != null )
 				return false;
 
-			if ( Velocity.WithZ( 0 ).Length < WallRunThreshold )
-				return false;
-
 			var trStart = Position + WallNormal * 5;
 			var trEnd = trStart - WallNormal * 7;
 			var tr = TraceBBox( trStart, trEnd );
