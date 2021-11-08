@@ -40,6 +40,8 @@ namespace Facepunch.Parkour
 		public ParkourDuck Duck;
 		public Unstuck Unstuck;
 
+		private float _previousSpeed;
+
 
 		public ParkourController()
 		{
@@ -222,14 +224,14 @@ namespace Facepunch.Parkour
 				var lineOffset = 0;
 				if ( Host.IsServer ) lineOffset = 10;
 
-				DebugOverlay.ScreenText( lineOffset + 0, $"        Position: {Position}" );
-				DebugOverlay.ScreenText( lineOffset + 1, $"        Velocity: {Velocity}" );
-				DebugOverlay.ScreenText( lineOffset + 2, $"           Speed: {Velocity.Length}" );
-				DebugOverlay.ScreenText( lineOffset + 3, $"    BaseVelocity: {BaseVelocity}" );
-				DebugOverlay.ScreenText( lineOffset + 4, $"    GroundEntity: {GroundEntity} [{GroundEntity?.Velocity}]" );
-				DebugOverlay.ScreenText( lineOffset + 5, $" SurfaceFriction: {SurfaceFriction}" );
-				DebugOverlay.ScreenText( lineOffset + 6, $"    WishVelocity: {WishVelocity}" );
-				DebugOverlay.ScreenText( lineOffset + 7, $"    Accel Helper: {_momentum}" );
+				DebugOverlay.ScreenText( lineOffset + 0, $"        Position: {Position}", .05f );
+				DebugOverlay.ScreenText( lineOffset + 1, $"        Velocity: {Velocity}", .05f );
+				DebugOverlay.ScreenText( lineOffset + 2, $"           Speed: {Velocity.Length}", .05f );
+				DebugOverlay.ScreenText( lineOffset + 3, $"    BaseVelocity: {BaseVelocity}", .05f );
+				DebugOverlay.ScreenText( lineOffset + 4, $"    GroundEntity: {GroundEntity} [{GroundEntity?.Velocity}]", .05f );
+				DebugOverlay.ScreenText( lineOffset + 5, $" SurfaceFriction: {SurfaceFriction}", .05f );
+				DebugOverlay.ScreenText( lineOffset + 6, $"    WishVelocity: {WishVelocity}", .05f );
+				DebugOverlay.ScreenText( lineOffset + 7, $"        Momentum: {_momentum}", .05f );
 			}
 
 		}
@@ -288,17 +290,14 @@ namespace Facepunch.Parkour
 			}
 			else
 			{
+				var spd = Velocity.Length;
+				if ( spd < _previousSpeed )
+					_momentum *= spd / _previousSpeed;
+				_previousSpeed = spd;
+
 				if ( Velocity.Length < GetWishSpeed() )
 					_momentum += Time.Delta * MomentumGain;
 			}
-
-			//   Player.SetAnimParam( "forward", Input.Forward );
-			//   Player.SetAnimParam( "sideward", Input.Right );
-			//   Player.SetAnimParam( "wishspeed", wishspeed );
-			//    Player.SetAnimParam( "walkspeed_scale", 2.0f / 190.0f );
-			//   Player.SetAnimParam( "runspeed_scale", 2.0f / 320.0f );
-
-			//  DebugOverlay.Text( 0, Pos + Vector3.Up * 100, $"forward: {Input.Forward}\nsideward: {Input.Right}" );
 
 			// Add in any base velocity to the current velocity.
 			Velocity += BaseVelocity;
