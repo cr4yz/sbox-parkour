@@ -32,6 +32,10 @@ namespace Facepunch.Parkour
 		[Net] public float AirControl { get; set; } = 30.0f;
 		public bool Swimming { get; set; } = false;
 		[Net] public bool AutoJump { get; set; } = false;
+		[Net] public float VaultTime { get; set; } = .5f;
+		[Net, Predicted] public TimeSince TimeSinceVault { get; set; }
+		[Net, Predicted] public Vector3 VaultStart { get; set; }
+		[Net, Predicted] public Vector3 VaultEnd { get; set; }
 
 		public ParkourDuck Duck;
 		public Unstuck Unstuck;
@@ -107,27 +111,14 @@ namespace Facepunch.Parkour
 
 			RestoreGroundPos();
 
-			//Velocity += BaseVelocity * ( 1 + Time.Delta * 0.5f );
-			//BaseVelocity = Vector3.Zero;
-
-			//Rot = Rotation.LookAt( Input.Rotation.Forward.WithZ( 0 ), Vector3.Up );
+			if ( TimeSinceVault < VaultTime )
+			{
+				Position = Vector3.Lerp( VaultStart, VaultEnd, TimeSinceVault / VaultTime );
+				return;
+			}
 
 			if ( Unstuck.TestAndFix() )
 				return;
-
-			// Check Stuck
-			// Unstuck - or return if stuck
-
-			// Set Ground Entity to null if  falling faster then 250
-
-			// store water level to compare later
-
-			// if not on ground, store fall velocity
-
-			// player->UpdateStepSound( player->m_pSurfaceData, mv->GetAbsOrigin(), mv->m_vecVelocity )
-
-
-			// RunLadderMode
 
 			CheckLadder();
 			Swimming = Pawn.WaterLevel.Fraction > 0.6f;
@@ -142,20 +133,6 @@ namespace Facepunch.Parkour
 
 				BaseVelocity = BaseVelocity.WithZ( 0 );
 			}
-
-
-			/*
-             if (player->m_flWaterJumpTime)
-	            {
-		            WaterJump();
-		            TryPlayerMove();
-		            // See if we are still in water?
-		            CheckWater();
-		            return;
-	            }
-            */
-
-			// if ( underwater ) do underwater movement
 
 			if ( AutoJump ? Input.Down( InputButton.Jump ) : Input.Pressed( InputButton.Jump ) )
 			{
@@ -434,86 +411,53 @@ namespace Facepunch.Parkour
 
 		public virtual void CheckJumpButton()
 		{
-			//if ( !player->CanJump() )
-			//    return false;
-
-
-			/*
-            if ( player->m_flWaterJumpTime )
-            {
-                player->m_flWaterJumpTime -= gpGlobals->frametime();
-                if ( player->m_flWaterJumpTime < 0 )
-                    player->m_flWaterJumpTime = 0;
-
-                return false;
-            }*/
-
-
-
-			// If we are in the water most of the way...
 			if ( Swimming )
 			{
-				// swimming, not jumping
 				ClearGroundEntity();
-
 				Velocity = Velocity.WithZ( 100 );
-
-				// play swimming sound
-				//  if ( player->m_flSwimSoundTime <= 0 )
-				{
-					// Don't play sound again for 1 second
-					//   player->m_flSwimSoundTime = 1000;
-					//   PlaySwimSound();
-				}
-
 				return;
 			}
 
 			if ( GroundEntity == null )
 				return;
 
-			/*
-            if ( player->m_Local.m_bDucking && (player->GetFlags() & FL_DUCKING) )
-                return false;
-            */
-
-			/*
-            // Still updating the eye position.
-            if ( player->m_Local.m_nDuckJumpTimeMsecs > 0u )
-                return false;
-            */
-
 			ClearGroundEntity();
 
-			// player->PlayStepSound( (Vector &)mv->GetAbsOrigin(), player->m_pSurfaceData, 1.0, true );
-
-			// MoveHelper()->PlayerSetAnimation( PLAYER_JUMP );
-
-			float flGroundFactor = 1.0f;
-			//if ( player->m_pSurfaceData )
+			if ( TryVault() )
 			{
-				//   flGroundFactor = g_pPhysicsQuery->GetGameSurfaceproperties( player->m_pSurfaceData )->m_flJumpFactor;
+				AddEvent( "vault" );
+				return;
 			}
 
+			float flGroundFactor = 1.0f;
 			float flMul = 268.3281572999747f * 1.2f;
-
 			float startz = Velocity.z;
 
 			if ( Duck.IsActive )
 				flMul *= 0.8f;
 
 			Velocity = Velocity.WithZ( startz + flMul * flGroundFactor );
-
 			Velocity -= new Vector3( 0, 0, Gravity * 0.5f ) * Time.Delta;
 
-			// mv->m_outJumpVel.z += mv->m_vecVelocity[2] - startz;
-			// mv->m_outStepHeight += 0.15f;
-
-			// don't jump again until released
-			//mv->m_nOldButtons |= IN_JUMP;
-
 			AddEvent( "jump" );
+		}
 
+		private bool TryVault()
+		{
+			var startPos = Position + Rotation.Forward * BodyGirth;
+			startPos.z += 100;
+			var endPos = startPos.WithZ( Position.z );
+
+			var trace = TraceBBox( startPos, endPos );
+			if ( !trace.Hit ) return false;
+			if ( trace.StartedSolid ) return false;
+
+			var vaultHeight = trace.EndPos.z - Position.z + 10;
+			TimeSinceVault = 0;
+			VaultStart = Position;
+			VaultEnd = Position.WithZ( Position.z + vaultHeight ) + Rotation.Forward * BodyGirth;
+
+			return true;
 		}
 
 		public virtual void AirMove()
