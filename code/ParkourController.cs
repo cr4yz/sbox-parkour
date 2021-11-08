@@ -298,7 +298,7 @@ namespace Facepunch.Parkour
 			if ( WishVelocity.IsNearZeroLength )
 			{
 				if ( _momentum > 0 )
-					_momentum -= Time.Delta;
+					_momentum -= Time.Delta * MomentumLose;
 				else
 					_momentum = 0;
 				return;
