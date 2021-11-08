@@ -34,6 +34,7 @@ namespace Facepunch.Parkour
 			base.OnKilled();
 
 			EnableDrawing = false;
+			EnableAllCollisions = false;
 		}
 
 		public override void PostCameraSetup( ref CameraSetup setup )
