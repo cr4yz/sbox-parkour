@@ -446,7 +446,7 @@ namespace Facepunch.Parkour
 		{
 			var startPos = Position + Rotation.Forward * BodyGirth;
 			startPos.z += 100;
-			var endPos = startPos.WithZ( Position.z );
+			var endPos = startPos.WithZ( Position.z + StepSize + 1 );
 
 			var trace = TraceBBox( startPos, endPos );
 			if ( !trace.Hit ) return false;
