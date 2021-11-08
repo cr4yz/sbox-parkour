@@ -61,7 +61,7 @@ namespace Facepunch.Parkour
 			var left = setup.Rotation.Left;
 			var up = setup.Rotation.Up;
 
-			if ( GroundEntity != null )
+			if ( GroundEntity != null || controller.WallRunning )
 			{
 				walkBob += Time.Delta * bobSpeed * bobSpeedAlpha;
 			}
@@ -69,8 +69,12 @@ namespace Facepunch.Parkour
 			setup.Position += up * MathF.Sin( walkBob ) * bobSpeedAlpha * 3;
 			setup.Position += left * MathF.Sin( walkBob * 0.6f ) * bobSpeedAlpha * 2;
 
+			var targetLean = controller.WallRunning
+				? controller.WallNormal.Dot( setup.Rotation.Right ) * 25f
+				: Velocity.Dot( setup.Rotation.Right ) * .03f;
+
 			// Camera lean
-			lean = lean.LerpTo( Velocity.Dot( setup.Rotation.Right ) * 0.03f, Time.Delta * 15.0f );
+			lean = lean.LerpTo( targetLean, Time.Delta * 15.0f );
 
 			var appliedLean = lean;
 			appliedLean += MathF.Sin( walkBob ) * bobSpeedAlpha * 0.2f;

@@ -16,14 +16,10 @@ namespace Facepunch.Parkour
 		[Net] public float MomentumGain { get; set; } = .5f;
 		[Net] public float MomentumLose { get; set; } = 3f;
 		[Net] public float AirAcceleration { get; set; } = 35.0f;
-		[Net] public float FallSoundZ { get; set; } = -30.0f;
 		[Net] public float GroundFriction { get; set; } = 4.0f;
-		[Net] public float SlideFriction { get; set; } = 75.0f;
+		[Net] public float SlideFriction { get; set; } = 100.0f;
 		[Net] public float StopSpeed { get; set; } = 100.0f;
-		[Net] public float Size { get; set; } = 20.0f;
-		[Net] public float DistEpsilon { get; set; } = 0.03125f;
 		[Net] public float GroundAngle { get; set; } = 46.0f;
-		[Net] public float Bounce { get; set; } = 0.0f;
 		[Net] public float StepSize { get; set; } = 18.0f;
 		[Net] public float MaxNonJumpVelocity { get; set; } = 140.0f;
 		[Net] public float BodyGirth { get; set; } = 32.0f;
@@ -31,12 +27,18 @@ namespace Facepunch.Parkour
 		[Net] public float EyeHeight { get; set; } = 64.0f;
 		[Net] public float Gravity { get; set; } = 800.0f;
 		[Net] public float AirControl { get; set; } = 30.0f;
-		public bool Swimming { get; set; } = false;
 		[Net] public bool AutoJump { get; set; } = false;
 		[Net] public float VaultTime { get; set; } = .5f;
+		[Net] public float WallRunTime { get; set; } = 3f;
+		[Net] public float WallRunThreshold { get; set; } = 200f;
 		[Net, Predicted] public TimeSince TimeSinceVault { get; set; }
 		[Net, Predicted] public Vector3 VaultStart { get; set; }
 		[Net, Predicted] public Vector3 VaultEnd { get; set; }
+		[Net, Predicted] public TimeSince TimeSinceWallRun { get; set; }
+		[Net, Predicted] public Vector3 WallNormal { get; set; }
+
+		public bool Swimming { get; set; } = false;
+		public bool WallRunning => TimeSinceWallRun < WallRunTime;
 
 		public ParkourDuck Duck { get; private set; }
 		public Unstuck Unstuck { get; private set; }
@@ -46,6 +48,8 @@ namespace Facepunch.Parkour
 		private bool _wasGrounded;
 		private Vector3 _mins;
 		private Vector3 _maxs;
+		private bool _isTouchingLadder;
+		private Vector3 _ladderNormal;
 
 		public ParkourController()
 		{
@@ -123,7 +127,7 @@ namespace Facepunch.Parkour
 			//
 			// Start Gravity
 			//
-			if ( !Swimming && !IsTouchingLadder )
+			if ( !Swimming && !_isTouchingLadder && !WallRunning )
 			{
 				Velocity -= new Vector3( 0, 0, Gravity * 0.5f ) * Time.Delta;
 				Velocity += new Vector3( 0, 0, BaseVelocity.z ) * Time.Delta;
@@ -149,7 +153,7 @@ namespace Facepunch.Parkour
 			var inSpeed = WishVelocity.Length.Clamp( 0, 1 );
 			WishVelocity *= Input.Rotation;
 
-			if ( !Swimming && !IsTouchingLadder )
+			if ( !Swimming && !_isTouchingLadder && !WallRunning )
 			{
 				WishVelocity = WishVelocity.WithZ( 0 );
 			}
@@ -167,9 +171,13 @@ namespace Facepunch.Parkour
 				ApplyFriction( 1 );
 				WaterMove();
 			}
-			else if ( IsTouchingLadder )
+			else if ( _isTouchingLadder )
 			{
 				LadderMove();
+			}
+			else if ( WallRunning )
+			{
+				WallRunMove();
 			}
 			else if ( GroundEntity != null )
 			{
@@ -184,7 +192,7 @@ namespace Facepunch.Parkour
 			CategorizePosition( bStayOnGround );
 
 			// FinishGravity
-			if ( !Swimming && !IsTouchingLadder )
+			if ( !Swimming && !_isTouchingLadder && !WallRunning )
 			{
 				Velocity -= new Vector3( 0, 0, Gravity * 0.5f ) * Time.Delta;
 			}
@@ -226,6 +234,49 @@ namespace Facepunch.Parkour
 			return DefaultSpeed;
 		}
 
+		public virtual void WallRunMove()
+		{
+			if ( GroundEntity != null )
+			{
+				TimeSinceWallRun = float.MaxValue;
+				Velocity = Velocity.WithZ( 0 );
+				return;
+			}
+
+			var wishspeed = WishVelocity.Length;
+
+			WishVelocity = WishVelocity.WithZ( 0 );
+			WishVelocity = WishVelocity.Normal * wishspeed;
+
+			if ( WishVelocity.Length < 1.0f )
+			{
+				TimeSinceWallRun = float.MaxValue;
+				return;
+			}
+
+			if ( Velocity.Length < 1.0f )
+			{
+				TimeSinceWallRun = float.MaxValue;
+				Velocity = Vector3.Zero;
+				return;
+			}
+
+			var gravity = TimeSinceWallRun / WallRunTime * Gravity;
+			Velocity = Velocity.WithZ( Velocity.z - gravity * Time.Delta );
+
+			// first try just moving to the destination
+			var dest = Position + Velocity * Time.Delta;
+			var pm = TraceBBox( Position, dest );
+
+			if ( pm.Fraction == 1 )
+			{
+				Position = pm.EndPos;
+				return;
+			}
+
+			StepMove();
+		}
+
 		public virtual void WalkMove()
 		{
 			var wishdir = WishVelocity.Normal;
@@ -241,7 +292,7 @@ namespace Facepunch.Parkour
 					var slopeDir = Vector3.Cross( Vector3.Up, Vector3.Cross( Vector3.Up, GroundNormal ) );
 					var dot = Vector3.Dot( Velocity.Normal, slopeDir );
 					var slopeForward = Vector3.Cross( GroundNormal, Pawn.Rotation.Right );
-					var spdGain = 100f.LerpTo( 500f, 1f - GroundNormal.z );
+					var spdGain = 200f.LerpTo( 500f, 1f - GroundNormal.z );
 
 					if ( dot > 0 )
 						spdGain *= -1;
@@ -251,6 +302,9 @@ namespace Facepunch.Parkour
 			}
 
 			var accel = Duck.IsActive && !Duck.Sliding ? DuckAcceleration : Acceleration;
+
+			if ( Duck.Sliding )
+				accel = .5f;
 
 			Velocity = Velocity.WithZ( 0 );
 			Accelerate( wishdir, wishspeed, 0, accel + _momentum );
@@ -296,7 +350,7 @@ namespace Facepunch.Parkour
 		private float _prevSpd;
 		private void DoMomentum()
 		{
-			if ( WishVelocity.IsNearZeroLength )
+			if ( WishVelocity.IsNearZeroLength || Duck.Sliding )
 			{
 				if ( _momentum > 0 )
 					_momentum -= Time.Delta * MomentumLose;
@@ -305,17 +359,17 @@ namespace Facepunch.Parkour
 				return;
 			}
 
-			var spd = Velocity.WithZ(0).Length;
+			var spd = Velocity.WithZ( 0 ).Length;
 			var lossFactor = spd / _prevSpd;
 			_prevSpd = spd;
 
-			if ( lossFactor < 1 )
+			if ( lossFactor < .9f )
 			{
 				_momentum *= lossFactor;
 			}
 			else
 			{
-				if ( Velocity.Length < GetWishSpeed() )
+				if ( spd < GetWishSpeed() )
 					_momentum += Time.Delta * MomentumGain;
 			}
 		}
@@ -417,6 +471,18 @@ namespace Facepunch.Parkour
 
 		public virtual void CheckJumpButton()
 		{
+			float flGroundFactor = 1.0f;
+			float flMul = 268.3281572999747f * 1.2f;
+			float startz = Velocity.z;
+			var jumpPower = startz + flMul * flGroundFactor;
+
+			if ( WallRunning )
+			{
+				TimeSinceWallRun = float.MaxValue;
+				Velocity = Velocity + WallNormal * 200 + Vector3.Up * jumpPower;
+				return;
+			}
+
 			if ( Swimming )
 			{
 				ClearGroundEntity();
@@ -424,28 +490,56 @@ namespace Facepunch.Parkour
 				return;
 			}
 
-			if ( GroundEntity == null )
-				return;
-
-			ClearGroundEntity();
-
 			if ( TryVault() )
 			{
 				AddEvent( "vault" );
 				return;
 			}
 
-			float flGroundFactor = 1.0f;
-			float flMul = 268.3281572999747f * 1.2f;
-			float startz = Velocity.z;
+			if ( GroundEntity == null )
+			{
+				if ( TryWallRun() )
+				{
+					AddEvent( "wallrun" );
+				}
+				return;
+			}
+
+			ClearGroundEntity();
 
 			if ( Duck.IsActive )
 				flMul *= 0.8f;
 
-			Velocity = Velocity.WithZ( startz + flMul * flGroundFactor );
+			Velocity = Velocity.WithZ( jumpPower );
 			Velocity -= new Vector3( 0, 0, Gravity * 0.5f ) * Time.Delta;
 
 			AddEvent( "jump" );
+		}
+
+		private bool TryWallRun()
+		{
+			var startPos = Position;
+			var endPos = startPos + Rotation.Forward * BodyGirth * 2;
+
+			var trace = TraceBBox( startPos, endPos );
+
+			if ( !trace.Hit )
+			{
+				endPos = startPos + Velocity.Normal * BodyGirth * 2;
+				trace = TraceBBox( startPos, endPos );
+
+				if ( !trace.Hit ) return false;
+			}
+
+			if ( trace.Normal.z != 0 ) return false;
+
+			DebugOverlay.Line( trace.EndPos, trace.EndPos + trace.Normal * 100, Color.Green, 10f, false );
+
+			Velocity = Velocity.WithZ( 0 );
+			WallNormal = trace.Normal;
+			TimeSinceWallRun = 0;
+
+			return true;
 		}
 
 		private bool TryVault()
@@ -457,6 +551,9 @@ namespace Facepunch.Parkour
 			var trace = TraceBBox( startPos, endPos );
 			if ( !trace.Hit ) return false;
 			if ( trace.StartedSolid ) return false;
+
+			DebugOverlay.Line( startPos, endPos, 10f, false );
+			DebugOverlay.Line( startPos, startPos + Vector3.Right * 50, 10f, false );
 
 			var vaultHeight = trace.EndPos.z - Position.z + 10;
 			TimeSinceVault = 0;
@@ -496,22 +593,19 @@ namespace Facepunch.Parkour
 			Velocity -= BaseVelocity;
 		}
 
-		bool IsTouchingLadder = false;
-		Vector3 LadderNormal;
-
 		public virtual void CheckLadder()
 		{
-			if ( IsTouchingLadder && Input.Pressed( InputButton.Jump ) )
+			if ( _isTouchingLadder && Input.Pressed( InputButton.Jump ) )
 			{
-				Velocity = LadderNormal * 100.0f;
-				IsTouchingLadder = false;
+				Velocity = _ladderNormal * 100.0f;
+				_isTouchingLadder = false;
 
 				return;
 			}
 
 			const float ladderDistance = 1.0f;
 			var start = Position;
-			Vector3 end = start + (IsTouchingLadder ? (LadderNormal * -1.0f) : WishVelocity.Normal) * ladderDistance;
+			Vector3 end = start + (_isTouchingLadder ? (_ladderNormal * -1.0f) : WishVelocity.Normal) * ladderDistance;
 
 			var pm = Trace.Ray( start, end )
 						.Size( _mins, _maxs )
@@ -520,21 +614,21 @@ namespace Facepunch.Parkour
 						.Ignore( Pawn )
 						.Run();
 
-			IsTouchingLadder = false;
+			_isTouchingLadder = false;
 
 			if ( pm.Hit )
 			{
-				IsTouchingLadder = true;
-				LadderNormal = pm.Normal;
+				_isTouchingLadder = true;
+				_ladderNormal = pm.Normal;
 			}
 		}
 
 		public virtual void LadderMove()
 		{
 			var velocity = WishVelocity;
-			float normalDot = velocity.Dot( LadderNormal );
-			var cross = LadderNormal * normalDot;
-			Velocity = (velocity - cross) + (-normalDot * LadderNormal.Cross( Vector3.Up.Cross( LadderNormal ).Normal ));
+			float normalDot = velocity.Dot( _ladderNormal );
+			var cross = _ladderNormal * normalDot;
+			Velocity = (velocity - cross) + (-normalDot * _ladderNormal.Cross( Vector3.Up.Cross( _ladderNormal ).Normal ));
 
 			Move();
 		}
@@ -695,7 +789,7 @@ namespace Facepunch.Parkour
 			//GroundTransform = GroundEntity.Transform.ToLocal( new Transform( Pos, Rot ) );
 		}
 
-		private Vector3 ClipVelocity( Vector3 input, Vector3 normal, float overbounce )
+		private Vector3 ClipVector( Vector3 input, Vector3 normal, float overbounce )
 		{
 			var backoff = Vector3.Dot( input, normal ) * overbounce;
 

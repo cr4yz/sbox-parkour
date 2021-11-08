@@ -40,6 +40,7 @@ namespace Facepunch.Parkour
 
 			_targetFov = _minFov.LerpTo( _maxFov, spdA * spdA * spdA * spdA );
 			FieldOfView = FieldOfView.LerpTo( _targetFov, Time.Delta * 10 );
+			ZNear = 3;
 		}
 
 	}
