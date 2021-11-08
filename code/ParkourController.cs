@@ -278,26 +278,7 @@ namespace Facepunch.Parkour
 			Accelerate( wishdir, wishspeed, 0, accel + _momentum );
 			Velocity = Velocity.WithZ( 0 );
 
-			if ( WishVelocity.IsNearlyZero() || Duck.IsActive )
-			{
-				var decel = MomentumLose;
-				if ( Duck.Sliding ) decel *= .5f;
-
-				if ( _momentum > 0 )
-					_momentum -= Time.Delta * decel;
-				else
-					_momentum = 0;
-			}
-			else
-			{
-				var spd = Velocity.Length;
-				if ( spd < _previousSpeed )
-					_momentum *= spd / _previousSpeed;
-				_previousSpeed = spd;
-
-				if ( Velocity.Length < GetWishSpeed() )
-					_momentum += Time.Delta * MomentumGain;
-			}
+			DoMomentum();
 
 			// Add in any base velocity to the current velocity.
 			Velocity += BaseVelocity;
@@ -332,6 +313,32 @@ namespace Facepunch.Parkour
 			}
 
 			StayOnGround();
+		}
+
+		private void DoMomentum()
+		{
+			if ( WishVelocity.IsNearZeroLength )
+			{
+				if ( _momentum > 0 )
+					_momentum -= Time.Delta;
+				else
+					_momentum = 0;
+				return;
+			}
+
+			var spd = Velocity.Length;
+			var lossFactor = spd / _previousSpeed;
+			_previousSpeed = spd;
+
+			if ( lossFactor < 1 )
+			{
+				_momentum *= lossFactor;
+			}
+			else
+			{
+				if ( Velocity.Length < GetWishSpeed() )
+					_momentum += Time.Delta * MomentumGain;
+			}
 		}
 
 		public virtual void StepMove()
