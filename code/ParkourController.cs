@@ -12,8 +12,8 @@ namespace Facepunch.Parkour
 		[Net] public float SlideThreshold { get; set; } = 130f;
 		[Net] public float Acceleration { get; set; } = 2f;
 		[Net] public float DuckAcceleration { get; set; } = 5f;
-		[Net] public float AccelAcceleration { get; set; } = .5f;
-		[Net] public float AccelDeceleration { get; set; } = 3f;
+		[Net] public float MomentumGain { get; set; } = .5f;
+		[Net] public float MomentumLose { get; set; } = 3f;
 		[Net] public float AirAcceleration { get; set; } = 35.0f;
 		[Net] public float FallSoundZ { get; set; } = -30.0f;
 		[Net] public float GroundFriction { get; set; } = 4.0f;
@@ -229,7 +229,7 @@ namespace Facepunch.Parkour
 				DebugOverlay.ScreenText( lineOffset + 4, $"    GroundEntity: {GroundEntity} [{GroundEntity?.Velocity}]" );
 				DebugOverlay.ScreenText( lineOffset + 5, $" SurfaceFriction: {SurfaceFriction}" );
 				DebugOverlay.ScreenText( lineOffset + 6, $"    WishVelocity: {WishVelocity}" );
-				DebugOverlay.ScreenText( lineOffset + 7, $"    Accel Helper: {_accel}" );
+				DebugOverlay.ScreenText( lineOffset + 7, $"    Accel Helper: {_momentum}" );
 			}
 
 		}
@@ -245,7 +245,7 @@ namespace Facepunch.Parkour
 			return DefaultSpeed;
 		}
 
-		private float _accel;
+		private float _momentum;
 		public virtual void WalkMove()
 		{
 			var wishdir = WishVelocity.Normal;
@@ -273,20 +273,23 @@ namespace Facepunch.Parkour
 			var accel = Duck.IsActive && !Duck.Sliding ? DuckAcceleration : Acceleration;
 
 			Velocity = Velocity.WithZ( 0 );
-			Accelerate( wishdir, wishspeed, 0, accel + _accel );
+			Accelerate( wishdir, wishspeed, 0, accel + _momentum );
 			Velocity = Velocity.WithZ( 0 );
 
 			if ( WishVelocity.IsNearlyZero() || Duck.IsActive )
 			{
-				if ( _accel > 0 )
-					_accel -= Time.Delta * AccelDeceleration;
+				var decel = MomentumLose;
+				if ( Duck.Sliding ) decel *= .5f;
+
+				if ( _momentum > 0 )
+					_momentum -= Time.Delta * decel;
 				else
-					_accel = 0;
+					_momentum = 0;
 			}
 			else
 			{
 				if ( Velocity.Length < GetWishSpeed() )
-					_accel += Time.Delta * AccelAcceleration;
+					_momentum += Time.Delta * MomentumGain;
 			}
 
 			//   Player.SetAnimParam( "forward", Input.Forward );
