@@ -234,12 +234,32 @@ namespace Facepunch.Parkour
 			return DefaultSpeed;
 		}
 
-		public virtual void WallRunMove()
+		private bool StillWallRunning()
 		{
 			if ( GroundEntity != null )
+				return false;
+
+			if ( Velocity.WithZ( 0 ).Length < WallRunThreshold )
+				return false;
+
+			var trStart = Position + WallNormal * 5;
+			var trEnd = trStart - WallNormal * 7;
+			var tr = TraceBBox( trStart, trEnd );
+
+			if ( !tr.Hit || tr.StartedSolid || tr.Normal != WallNormal )
+				return false;
+
+			return true;
+		}
+
+		public virtual void WallRunMove()
+		{
+			if ( !StillWallRunning() )
 			{
 				TimeSinceWallRun = float.MaxValue;
-				Velocity = Velocity.WithZ( 0 );
+
+				if( GroundEntity != null )
+					Velocity = Velocity.WithZ( 0 );
 				return;
 			}
 
@@ -532,8 +552,6 @@ namespace Facepunch.Parkour
 			}
 
 			if ( trace.Normal.z != 0 ) return false;
-
-			DebugOverlay.Line( trace.EndPos, trace.EndPos + trace.Normal * 100, Color.Green, 10f, false );
 
 			Velocity = Velocity.WithZ( 0 );
 			WallNormal = trace.Normal;
