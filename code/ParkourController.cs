@@ -1,4 +1,5 @@
 ﻿using Sandbox;
+using System;
 
 namespace Facepunch.Parkour
 {
@@ -37,11 +38,14 @@ namespace Facepunch.Parkour
 		[Net, Predicted] public Vector3 VaultStart { get; set; }
 		[Net, Predicted] public Vector3 VaultEnd { get; set; }
 
-		public ParkourDuck Duck;
-		public Unstuck Unstuck;
+		public ParkourDuck Duck { get; private set; }
+		public Unstuck Unstuck { get; private set; }
 
-		private float _previousSpeed;
-
+		private float _momentum;
+		private Vector3 _previousVelocity;
+		private bool _wasGrounded;
+		private Vector3 _mins;
+		private Vector3 _maxs;
 
 		public ParkourController()
 		{
@@ -49,9 +53,6 @@ namespace Facepunch.Parkour
 			Unstuck = new Unstuck( this );
 		}
 
-		/// <summary>
-		/// This is temporary, get the hull size for the player's collision
-		/// </summary>
 		public override BBox GetHull()
 		{
 			var girth = BodyGirth * 0.5f;
@@ -61,21 +62,13 @@ namespace Facepunch.Parkour
 			return new BBox( mins, maxs );
 		}
 
-
-		// Duck body height 32
-		// Eye Height 64
-		// Duck Eye Height 28
-
-		protected Vector3 mins;
-		protected Vector3 maxs;
-
 		public virtual void SetBBox( Vector3 mins, Vector3 maxs )
 		{
-			if ( this.mins == mins && this.maxs == maxs )
+			if ( this._mins == mins && this._maxs == maxs )
 				return;
 
-			this.mins = mins;
-			this.maxs = maxs;
+			this._mins = mins;
+			this._maxs = maxs;
 		}
 
 		/// <summary>
@@ -105,6 +98,8 @@ namespace Facepunch.Parkour
 
 		public override void Simulate()
 		{
+			CheckFallDamage();
+
 			EyePosLocal = Vector3.Up * (EyeHeight * Pawn.Scale);
 			UpdateBBox();
 
@@ -141,21 +136,10 @@ namespace Facepunch.Parkour
 				CheckJumpButton();
 			}
 
-			// Fricion is handled before we add in any base velocity. That way, if we are on a conveyor,
-			//  we don't slow when standing still, relative to the conveyor.
-			bool bStartOnGround = GroundEntity != null;
-			//bool bDropSound = false;
-			if ( bStartOnGround )
+			if ( GroundEntity != null )
 			{
-				//if ( Velocity.z < FallSoundZ ) bDropSound = true;
-
 				Velocity = Velocity.WithZ( 0 );
-				//player->m_Local.m_flFallVelocity = 0.0f;
-
-				if ( GroundEntity != null )
-				{
-					ApplyFriction( GroundFriction * SurfaceFriction );
-				}
+				ApplyFriction( GroundFriction * SurfaceFriction );
 			}
 
 			//
@@ -174,6 +158,8 @@ namespace Facepunch.Parkour
 			WishVelocity *= GetWishSpeed();
 
 			Duck.PreTick();
+
+			_previousVelocity = Velocity;
 
 			bool bStayOnGround = false;
 			if ( Swimming )
@@ -203,23 +189,17 @@ namespace Facepunch.Parkour
 				Velocity -= new Vector3( 0, 0, Gravity * 0.5f ) * Time.Delta;
 			}
 
-
 			if ( GroundEntity != null )
 			{
 				Velocity = Velocity.WithZ( 0 );
 			}
 
-			// CheckFalling(); // fall damage etc
-
-			// Land Sound
-			// Swim Sounds
-
 			SaveGroundPos();
 
 			if ( Debug && Pawn.IsLocalPawn )
 			{
-				DebugOverlay.Box( Position + TraceOffset, mins, maxs, Color.Red );
-				DebugOverlay.Box( Position, mins, maxs, Color.Blue );
+				DebugOverlay.Box( Position + TraceOffset, _mins, _maxs, Color.Red );
+				DebugOverlay.Box( Position, _mins, _maxs, Color.Blue );
 
 				var lineOffset = 0;
 				if ( Host.IsServer ) lineOffset = 10;
@@ -233,7 +213,6 @@ namespace Facepunch.Parkour
 				DebugOverlay.ScreenText( lineOffset + 6, $"    WishVelocity: {WishVelocity}", .05f );
 				DebugOverlay.ScreenText( lineOffset + 7, $"        Momentum: {_momentum}", .05f );
 			}
-
 		}
 
 		public virtual float GetWishSpeed()
@@ -247,7 +226,6 @@ namespace Facepunch.Parkour
 			return DefaultSpeed;
 		}
 
-		private float _momentum;
 		public virtual void WalkMove()
 		{
 			var wishdir = WishVelocity.Normal;
@@ -327,8 +305,8 @@ namespace Facepunch.Parkour
 			}
 
 			var spd = Velocity.Length;
-			var lossFactor = spd / _previousSpeed;
-			_previousSpeed = spd;
+			var prevSpd = _previousVelocity.WithZ( 0 ).Length;
+			var lossFactor = spd / prevSpd;
 
 			if ( lossFactor < 1 )
 			{
@@ -344,7 +322,7 @@ namespace Facepunch.Parkour
 		public virtual void StepMove()
 		{
 			MoveHelper mover = new MoveHelper( Position, Velocity );
-			mover.Trace = mover.Trace.Size( mins, maxs ).Ignore( Pawn );
+			mover.Trace = mover.Trace.Size( _mins, _maxs ).Ignore( Pawn );
 			mover.MaxStandableAngle = GroundAngle;
 
 			mover.TryMoveWithStep( Time.Delta, StepSize );
@@ -356,7 +334,7 @@ namespace Facepunch.Parkour
 		public virtual void Move()
 		{
 			MoveHelper mover = new MoveHelper( Position, Velocity );
-			mover.Trace = mover.Trace.Size( mins, maxs ).Ignore( Pawn );
+			mover.Trace = mover.Trace.Size( _mins, _maxs ).Ignore( Pawn );
 			mover.MaxStandableAngle = GroundAngle;
 
 			mover.TryMove( Time.Delta );
@@ -517,7 +495,7 @@ namespace Facepunch.Parkour
 			Vector3 end = start + (IsTouchingLadder ? (LadderNormal * -1.0f) : WishVelocity.Normal) * ladderDistance;
 
 			var pm = Trace.Ray( start, end )
-						.Size( mins, maxs )
+						.Size( _mins, _maxs )
 						.HitLayer( CollisionLayer.All, false )
 						.HitLayer( CollisionLayer.LADDER, true )
 						.Ignore( Pawn )
@@ -630,16 +608,24 @@ namespace Facepunch.Parkour
 			{
 				BaseVelocity = GroundEntity.Velocity;
 			}
+		}
 
-			/*
-              	m_vecGroundUp = pm.m_vHitNormal;
-	            player->m_surfaceProps = pm.m_pSurfaceProperties->GetNameHash();
-	            player->m_pSurfaceData = pm.m_pSurfaceProperties;
-	            const CPhysSurfaceProperties *pProp = pm.m_pSurfaceProperties;
+		private void CheckFallDamage()
+		{
+			var grounded = GroundEntity != null;
+			var justLanded = !_wasGrounded && grounded;
+			_wasGrounded = grounded;
 
-	            const CGameSurfaceProperties *pGameProps = g_pPhysicsQuery->GetGameSurfaceproperties( pProp );
-	            player->m_chTextureType = (int8)pGameProps->m_nLegacyGameMaterial;
-            */
+			if ( !justLanded )
+				return;
+
+			var willSlide = Input.Down( InputButton.Duck ) && Velocity.WithZ( 0 ).Length > SlideThreshold;
+			var fallSpeed = Math.Abs(_previousVelocity.z);
+			var fallSpeedMaxLoss = willSlide ? 5000 : 2000;
+			var a = 1f - MathF.Min(fallSpeed / fallSpeedMaxLoss, 1);
+
+			Velocity = Velocity.ClampLength( Velocity.Length * a );
+			_momentum *= a * .75f;
 		}
 
 		/// <summary>
@@ -661,7 +647,7 @@ namespace Facepunch.Parkour
 		/// </summary>
 		public override TraceResult TraceBBox( Vector3 start, Vector3 end, float liftFeet = 0.0f )
 		{
-			return TraceBBox( start, end, mins, maxs, liftFeet );
+			return TraceBBox( start, end, _mins, _maxs, liftFeet );
 		}
 
 		/// <summary>
