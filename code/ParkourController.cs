@@ -36,9 +36,9 @@ namespace Facepunch.Parkour
 		[Net, Predicted] public Vector3 VaultEnd { get; set; }
 		[Net, Predicted] public TimeSince TimeSinceWallRun { get; set; }
 		[Net, Predicted] public Vector3 WallNormal { get; set; }
+		[Net, Predicted] public bool WallRunning { get; set; }
 
 		public bool Swimming { get; set; } = false;
-		public bool WallRunning => TimeSinceWallRun < WallRunTime;
 
 		public ParkourDuck Duck { get; private set; }
 		public Unstuck Unstuck { get; private set; }
@@ -239,8 +239,14 @@ namespace Facepunch.Parkour
 			if ( GroundEntity != null )
 				return false;
 
-			var trStart = Position + WallNormal * 5;
-			var trEnd = trStart - WallNormal * 7;
+			if ( WishVelocity.WithZ( 0 ).Length < 0 )
+				return false;
+
+			if ( Velocity.Length < 1.0f )
+				return false;
+
+			var trStart = Position + WallNormal * BodyGirth * 2;
+			var trEnd = Position - WallNormal * BodyGirth * 2;
 			var tr = TraceBBox( trStart, trEnd );
 
 			if ( !tr.Hit || tr.StartedSolid || tr.Normal != WallNormal )
@@ -253,7 +259,7 @@ namespace Facepunch.Parkour
 		{
 			if ( !StillWallRunning() )
 			{
-				TimeSinceWallRun = float.MaxValue;
+				WallRunning = false;
 
 				if( GroundEntity != null )
 					Velocity = Velocity.WithZ( 0 );
@@ -264,19 +270,6 @@ namespace Facepunch.Parkour
 
 			WishVelocity = WishVelocity.WithZ( 0 );
 			WishVelocity = WishVelocity.Normal * wishspeed;
-
-			if ( WishVelocity.Length < 1.0f )
-			{
-				TimeSinceWallRun = float.MaxValue;
-				return;
-			}
-
-			if ( Velocity.Length < 1.0f )
-			{
-				TimeSinceWallRun = float.MaxValue;
-				Velocity = Vector3.Zero;
-				return;
-			}
 
 			var gravity = TimeSinceWallRun / WallRunTime * Gravity;
 			Velocity = Velocity.WithZ( Velocity.z - gravity * Time.Delta );
@@ -495,7 +488,7 @@ namespace Facepunch.Parkour
 
 			if ( WallRunning )
 			{
-				TimeSinceWallRun = float.MaxValue;
+				WallRunning = false;
 				Velocity = Velocity + WallNormal * 200 + Vector3.Up * jumpPower;
 				return;
 			}
@@ -535,6 +528,8 @@ namespace Facepunch.Parkour
 
 		private bool TryWallRun()
 		{
+			if ( Velocity.z < -100 ) return false;
+
 			var startPos = Position;
 			var endPos = startPos + Rotation.Forward * BodyGirth * 2;
 
@@ -549,10 +544,12 @@ namespace Facepunch.Parkour
 			}
 
 			if ( trace.Normal.z != 0 ) return false;
+			if ( trace.Normal == WallNormal && TimeSinceWallRun < 3f ) return false;
 
 			Velocity = Velocity.WithZ( 0 );
 			WallNormal = trace.Normal;
 			TimeSinceWallRun = 0;
+			WallRunning = true;
 
 			return true;
 		}
