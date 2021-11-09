@@ -102,6 +102,7 @@ namespace Facepunch.Parkour
 
 		public override void Simulate()
 		{
+			AutoJump = false;
 			CheckFallDamage();
 
 			EyePosLocal = Vector3.Up * (EyeHeight * Pawn.Scale);
@@ -393,9 +394,13 @@ namespace Facepunch.Parkour
 			if ( !justLanded )
 				return;
 
-			var willSlide = Input.Down( InputButton.Duck ) && Velocity.WithZ( 0 ).Length > SlideThreshold;
 			var fallSpeed = Math.Abs( _previousVelocity.z );
-			var fallSpeedMaxLoss = willSlide ? 5000 : 2000;
+
+			if ( fallSpeed < 500 )
+				return;
+
+			var willSlide = Input.Down( InputButton.Duck ) && Velocity.WithZ( 0 ).Length > SlideThreshold;
+			var fallSpeedMaxLoss = willSlide ? 5000 : 3000;
 			var a = 1f - MathF.Min( fallSpeed / fallSpeedMaxLoss, 1 );
 
 			Velocity = Velocity.ClampLength( Velocity.Length * a );
