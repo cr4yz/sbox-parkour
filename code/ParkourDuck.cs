@@ -30,12 +30,19 @@ namespace Facepunch.Parkour
 
 			if ( IsActive )
 			{
+				var wasSliding = Sliding;
 				Sliding = _controller.GroundEntity != null && _controller.Velocity.Length > _controller.SlideThreshold;
 				_controller.SetTag( Sliding ? "sitting" : "ducked" );
 				_controller.EyePosLocal *= Sliding ? .35f : .5f;
 
-				if ( Sliding )
+				if ( Sliding && !wasSliding )
+				{
 					TimeSinceSlide = 0;
+
+					var len = _controller.Velocity.WithZ( 0 ).Length;
+					var newLen = len + _controller.SlideBoost;
+					_controller.Velocity *= newLen / len;
+				}
 			}
 		}
 

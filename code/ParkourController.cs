@@ -18,7 +18,8 @@ namespace Facepunch.Parkour
 		[Net] public float MomentumLose { get; set; } = 1.5f;
 		[Net] public float AirAcceleration { get; set; } = 35.0f;
 		[Net] public float GroundFriction { get; set; } = 4.0f;
-		[Net] public float SlideFriction { get; set; } = 100.0f;
+		[Net] public float SlideFriction { get; set; } = 175.0f;
+		[Net] public float SlideBoost { get; set; } = 75f;
 		[Net] public float StopSpeed { get; set; } = 100.0f;
 		[Net] public float GroundAngle { get; set; } = 46.0f;
 		[Net] public float StepSize { get; set; } = 18.0f;
@@ -587,7 +588,7 @@ namespace Facepunch.Parkour
 			foreach ( var dir in testDirections )
 			{
 				var startPos = Position - dir;
-				var endPos = Position + dir * BodyGirth;
+				var endPos = Position + dir * BodyGirth * 2;
 				trace = TraceBBox( startPos, endPos );
 				if ( trace.Hit && !trace.StartedSolid ) break;
 			}
