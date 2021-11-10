@@ -333,6 +333,7 @@ namespace Facepunch.Parkour
 						spdGain *= -1;
 
 					Velocity += spdGain * slopeForward * Time.Delta;
+					_momentum += Time.Delta;
 				}
 			}
 
