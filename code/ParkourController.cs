@@ -256,14 +256,14 @@ namespace Facepunch.Parkour
 			if ( GroundEntity != null )
 				return false;
 
-			if ( WishVelocity.WithZ( 0 ).Length < 0 )
+			if ( WishVelocity.WithZ( 0 ).Length.AlmostEqual(0f) )
 				return false;
 
 			if ( Velocity.Length < 1.0f && TimeSinceWallRun > .5f )
 				return false;
 
 			var trStart = Position + WallNormal;
-			var trEnd = Position - WallNormal * 2;
+			var trEnd = Position - WallNormal * BodyGirth * 2;
 			var tr = TraceBBox( trStart, trEnd );
 
 			if ( !tr.Hit || tr.Normal != WallNormal )
@@ -577,9 +577,9 @@ namespace Facepunch.Parkour
 		{
 			var testDirections = new List<Vector3>()
 			{
-				Rotation.Forward,
-				Rotation.Left,
-				Rotation.Right,
+				Vector3.Forward,
+				Vector3.Left,
+				Vector3.Right,
 				Velocity.Normal
 			};
 
