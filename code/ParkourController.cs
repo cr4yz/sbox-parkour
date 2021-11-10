@@ -338,12 +338,13 @@ namespace Facepunch.Parkour
 			}
 
 			var accel = Duck.IsActive && !Duck.Sliding ? DuckAcceleration : Acceleration;
+			accel += _momentum;
 
 			if ( Duck.Sliding )
 				accel = .5f;
 
 			Velocity = Velocity.WithZ( 0 );
-			Accelerate( wishdir, wishspeed, 0, accel + _momentum );
+			Accelerate( wishdir, wishspeed, 0, accel );
 			Velocity = Velocity.WithZ( 0 );
 
 			DoMomentum();
