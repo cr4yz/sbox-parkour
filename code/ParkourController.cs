@@ -7,9 +7,9 @@ namespace Facepunch.Parkour
 	partial class ParkourController : BasePlayerController
 	{
 
-		[Net] public float SprintSpeed { get; set; } = 325f;
+		[Net] public float SprintSpeed { get; set; } = 250f;
 		[Net] public float WalkSpeed { get; set; } = 150.0f;
-		[Net] public float DefaultSpeed { get; set; } = 325f;
+		[Net] public float DefaultSpeed { get; set; } = 250f;
 		[Net] public float DuckSpeed { get; set; } = 110f;
 		[Net] public float SlideThreshold { get; set; } = 130f;
 		[Net] public float Acceleration { get; set; } = 2f;
@@ -429,7 +429,7 @@ namespace Facepunch.Parkour
 			mover.Trace = mover.Trace.Size( _mins, _maxs ).Ignore( Pawn );
 			mover.MaxStandableAngle = GroundAngle;
 
-			mover.TryMoveWithStep( Time.Delta, StepSize );
+			mover.TryMoveWithStep( Time.Delta, Duck.Sliding ? 2 : StepSize );
 
 			Position = mover.Position;
 			Velocity = mover.Velocity;
