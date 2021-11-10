@@ -33,6 +33,9 @@ namespace Facepunch.Parkour
 		[Net] public float WallRunTime { get; set; } = 3f;
 		[Net] public float JumpPower { get; set; } = 268f;
 		[Net] public float WallJumpPower { get; set; } = 268f;
+		[Net] public float MaxVaultHeight { get; set; } = 150f;
+		[Net] public float MinVaultTime { get; set; } = .1f;
+		[Net] public float MaxVaultTime { get; set; } = .65f;
 		[Net, Predicted] public TimeSince TimeSinceVault { get; set; }
 		[Net, Predicted] public Vector3 VaultStart { get; set; }
 		[Net, Predicted] public Vector3 VaultEnd { get; set; }
@@ -45,6 +48,7 @@ namespace Facepunch.Parkour
 		public ParkourDuck Duck { get; private set; }
 		public Unstuck Unstuck { get; private set; }
 
+		private float _vaultHeight;
 		private float _momentum;
 		private Vector3 _previousVelocity;
 		private bool _wasGrounded;
@@ -115,9 +119,10 @@ namespace Facepunch.Parkour
 
 			RestoreGroundPos();
 
-			if ( TimeSinceVault < VaultTime )
+			var vaultTime = MinVaultTime.LerpTo( MaxVaultTime, _vaultHeight / MaxVaultHeight );
+			if ( TimeSinceVault < vaultTime )
 			{
-				Position = Vector3.Lerp( VaultStart, VaultEnd, TimeSinceVault / VaultTime );
+				Position = Vector3.Lerp( VaultStart, VaultEnd, TimeSinceVault / vaultTime );
 				return;
 			}
 
@@ -597,13 +602,14 @@ namespace Facepunch.Parkour
 			if ( !trace.Hit ) return false;
 			if ( trace.StartedSolid ) return false;
 
-			DebugOverlay.Line( startPos, endPos, 10f, false );
-			DebugOverlay.Line( startPos, startPos + Vector3.Right * 50, 10f, false );
+			var vaultHeight = trace.EndPos.z - Position.z;
+			if ( vaultHeight < StepSize ) return false;
+			if ( vaultHeight > MaxVaultHeight ) return false;
 
-			var vaultHeight = trace.EndPos.z - Position.z + 10;
+			_vaultHeight = vaultHeight;
 			TimeSinceVault = 0;
 			VaultStart = Position;
-			VaultEnd = Position.WithZ( Position.z + vaultHeight ) + Rotation.Forward * BodyGirth;
+			VaultEnd = Position.WithZ( Position.z + _vaultHeight ) + Rotation.Forward * BodyGirth;
 			Velocity = Velocity.WithZ( 0 );
 
 			return true;
