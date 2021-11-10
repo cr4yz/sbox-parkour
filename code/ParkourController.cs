@@ -1,5 +1,6 @@
 ﻿using Sandbox;
 using System;
+using System.Collections.Generic;
 
 namespace Facepunch.Parkour
 {
@@ -30,7 +31,8 @@ namespace Facepunch.Parkour
 		[Net] public bool AutoJump { get; set; } = false;
 		[Net] public float VaultTime { get; set; } = .25f;
 		[Net] public float WallRunTime { get; set; } = 3f;
-		[Net] public float WallRunThreshold { get; set; } = 200f;
+		[Net] public float JumpPower { get; set; } = 268f;
+		[Net] public float WallJumpPower { get; set; } = 268f;
 		[Net, Predicted] public TimeSince TimeSinceVault { get; set; }
 		[Net, Predicted] public Vector3 VaultStart { get; set; }
 		[Net, Predicted] public Vector3 VaultEnd { get; set; }
@@ -243,13 +245,14 @@ namespace Facepunch.Parkour
 			if ( WishVelocity.WithZ( 0 ).Length < 0 )
 				return false;
 
-			if ( Velocity.Length < 1.0f )
+			if ( Velocity.Length < 1.0f && TimeSinceWallRun > .5f )
 				return false;
 
+			var trStart = Position + WallNormal;
 			var trEnd = Position - WallNormal * 2;
-			var tr = TraceBBox( Position, trEnd );
+			var tr = TraceBBox( trStart, trEnd );
 
-			if ( !tr.Hit || tr.StartedSolid || tr.Normal != WallNormal )
+			if ( !tr.Hit || tr.Normal != WallNormal )
 				return false;
 
 			return true;
@@ -261,7 +264,7 @@ namespace Facepunch.Parkour
 			{
 				WallRunning = false;
 
-				if( GroundEntity != null )
+				if ( GroundEntity != null )
 					Velocity = Velocity.WithZ( 0 );
 				return;
 			}
@@ -272,7 +275,16 @@ namespace Facepunch.Parkour
 			WishVelocity = WishVelocity.Normal * wishspeed;
 
 			var gravity = TimeSinceWallRun / WallRunTime * Gravity;
-			Velocity = Velocity.WithZ( Velocity.z - gravity * Time.Delta );
+			var lookingAtWall = Vector3.Dot( WallNormal, WishVelocity.Normal ) < -.5f;
+
+			if ( lookingAtWall && Input.Forward > 0 && TimeSinceWallRun < 1f )
+			{
+				Velocity = new Vector3( 0, 0, 200 );
+			}
+			else
+			{
+				Velocity = Velocity.WithZ( Velocity.z - gravity * Time.Delta );
+			}
 
 			// first try just moving to the destination
 			var dest = Position + Velocity * Time.Delta;
@@ -490,30 +502,38 @@ namespace Facepunch.Parkour
 
 		public virtual void CheckJumpButton()
 		{
-			float flGroundFactor = 1.0f;
-			float flMul = 268.3281572999747f * 1.2f;
-			float startz = Velocity.z;
-			var jumpPower = startz + flMul * flGroundFactor;
+			if ( TryVault() )
+			{
+				AddEvent( "vault" );
+				return;
+			}
 
 			if ( WallRunning )
 			{
-				var jumpPowerHalf = jumpPower / 2f;
-				var spd = Velocity.WithZ( 0 ).Length + jumpPowerHalf;
-				Velocity = EyeRot.Forward * spd + Vector3.Up * jumpPowerHalf;
+				var jumpDir = new Vector3( Input.Forward, Input.Left, 0 ).Normal;
+				jumpDir *= Rotation.FromYaw( Input.Rotation.Yaw() );
+
+				if ( Vector3.Dot( WallNormal, jumpDir ) <= 0 )
+					jumpDir = WallNormal;
+
+				var jumpVelocity = (jumpDir + Vector3.Up) * WallJumpPower;
+				jumpVelocity += jumpDir * Velocity.WithZ( 0 ).Length / 2f;
+
+				Velocity = jumpVelocity;
+				WallNormal = Vector3.Zero;
 				WallRunning = false;
 				return;
 			}
+
+			var flGroundFactor = 1.0f;
+			var flMul = 268.3281572999747f * 1.2f;
+			var startz = Velocity.z;
+			var jumpPower = startz + flMul * flGroundFactor;
 
 			if ( Swimming )
 			{
 				ClearGroundEntity();
 				Velocity = Velocity.WithZ( 100 );
-				return;
-			}
-
-			if ( TryVault() )
-			{
-				AddEvent( "vault" );
 				return;
 			}
 
@@ -539,23 +559,25 @@ namespace Facepunch.Parkour
 
 		private bool TryWallRun()
 		{
-			if ( Velocity.z < -100 ) return false;
-
-			var startPos = Position;
-			var endPos = startPos + EyeRot.Forward * BodyGirth * 2;
-
-			var trace = TraceBBox( startPos, endPos );
-
-			if ( !trace.Hit )
+			var testDirections = new List<Vector3>()
 			{
-				endPos = startPos + Velocity.Normal * BodyGirth * 2;
-				trace = TraceBBox( startPos, endPos );
+				Rotation.Forward,
+				Rotation.Left,
+				Rotation.Right,
+				Velocity.Normal
+			};
 
-				if ( !trace.Hit ) return false;
+			TraceResult trace = default;
+
+			foreach ( var dir in testDirections )
+			{
+				var startPos = Position - dir;
+				var endPos = Position + dir * BodyGirth;
+				trace = TraceBBox( startPos, endPos );
+				if ( trace.Hit && !trace.StartedSolid ) break;
 			}
 
 			if ( trace.Normal.z != 0 ) return false;
-			if ( trace.Normal == WallNormal && TimeSinceWallRun < 3f ) return false;
 
 			Velocity = Velocity.WithZ( 0 );
 			WallNormal = trace.Normal;
@@ -582,6 +604,7 @@ namespace Facepunch.Parkour
 			TimeSinceVault = 0;
 			VaultStart = Position;
 			VaultEnd = Position.WithZ( Position.z + vaultHeight ) + Rotation.Forward * BodyGirth;
+			Velocity = Velocity.WithZ( 0 );
 
 			return true;
 		}
