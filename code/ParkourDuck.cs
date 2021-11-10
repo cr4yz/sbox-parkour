@@ -9,6 +9,7 @@ namespace Facepunch.Parkour
 		private Vector3 _originalMins;
 		private Vector3 _originalMaxs;
 
+		public TimeSince TimeSinceSlide { get; set; }
 		public bool Sliding { get; private set; }
 		public bool IsActive { get; private set; }
 
@@ -32,6 +33,9 @@ namespace Facepunch.Parkour
 				Sliding = _controller.GroundEntity != null && _controller.Velocity.Length > _controller.SlideThreshold;
 				_controller.SetTag( Sliding ? "sitting" : "ducked" );
 				_controller.EyePosLocal *= Sliding ? .35f : .5f;
+
+				if ( Sliding )
+					TimeSinceSlide = 0;
 			}
 		}
 

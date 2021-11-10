@@ -14,7 +14,7 @@ namespace Facepunch.Parkour
 		[Net] public float Acceleration { get; set; } = 2f;
 		[Net] public float DuckAcceleration { get; set; } = 5f;
 		[Net] public float MomentumGain { get; set; } = .5f;
-		[Net] public float MomentumLose { get; set; } = 3f;
+		[Net] public float MomentumLose { get; set; } = 1.5f;
 		[Net] public float AirAcceleration { get; set; } = 35.0f;
 		[Net] public float GroundFriction { get; set; } = 4.0f;
 		[Net] public float SlideFriction { get; set; } = 100.0f;
@@ -28,7 +28,7 @@ namespace Facepunch.Parkour
 		[Net] public float Gravity { get; set; } = 800.0f;
 		[Net] public float AirControl { get; set; } = 30.0f;
 		[Net] public bool AutoJump { get; set; } = false;
-		[Net] public float VaultTime { get; set; } = .5f;
+		[Net] public float VaultTime { get; set; } = .25f;
 		[Net] public float WallRunTime { get; set; } = 3f;
 		[Net] public float WallRunThreshold { get; set; } = 200f;
 		[Net, Predicted] public TimeSince TimeSinceVault { get; set; }
@@ -246,9 +246,8 @@ namespace Facepunch.Parkour
 			if ( Velocity.Length < 1.0f )
 				return false;
 
-			var trStart = Position + WallNormal * BodyGirth * 2;
-			var trEnd = Position - WallNormal * BodyGirth * 2;
-			var tr = TraceBBox( trStart, trEnd );
+			var trEnd = Position - WallNormal * 2;
+			var tr = TraceBBox( Position, trEnd );
 
 			if ( !tr.Hit || tr.StartedSolid || tr.Normal != WallNormal )
 				return false;
@@ -361,6 +360,11 @@ namespace Facepunch.Parkour
 		private float _prevSpd;
 		private void DoMomentum()
 		{
+			if ( Duck.TimeSinceSlide < 1.5f )
+			{
+				return;
+			}
+
 			if ( WishVelocity.IsNearZeroLength || Duck.Sliding )
 			{
 				if ( _momentum > 0 )
@@ -493,8 +497,10 @@ namespace Facepunch.Parkour
 
 			if ( WallRunning )
 			{
+				var jumpPowerHalf = jumpPower / 2f;
+				var spd = Velocity.WithZ( 0 ).Length + jumpPowerHalf;
+				Velocity = EyeRot.Forward * spd + Vector3.Up * jumpPowerHalf;
 				WallRunning = false;
-				Velocity = Velocity + WallNormal * 200 + Vector3.Up * jumpPower;
 				return;
 			}
 
@@ -536,7 +542,7 @@ namespace Facepunch.Parkour
 			if ( Velocity.z < -100 ) return false;
 
 			var startPos = Position;
-			var endPos = startPos + Rotation.Forward * BodyGirth * 2;
+			var endPos = startPos + EyeRot.Forward * BodyGirth * 2;
 
 			var trace = TraceBBox( startPos, endPos );
 
