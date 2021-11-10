@@ -70,7 +70,7 @@ namespace Facepunch.Parkour
 			setup.Position += left * MathF.Sin( walkBob * 0.6f ) * bobSpeedAlpha * 2;
 
 			var targetLean = controller.WallRunning
-				? controller.WallNormal.Dot( setup.Rotation.Right ) * 25f
+				? controller.WallNormal.Dot( setup.Rotation.Right ) * 12f
 				: Velocity.Dot( setup.Rotation.Right ) * .03f;
 
 			// Camera lean
