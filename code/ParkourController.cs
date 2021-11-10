@@ -36,6 +36,7 @@ namespace Facepunch.Parkour
 		[Net] public float MaxVaultHeight { get; set; } = 150f;
 		[Net] public float MinVaultTime { get; set; } = .1f;
 		[Net] public float MaxVaultTime { get; set; } = .65f;
+		[Net] public float ClimbVaultMultiplier { get; set; } = 1.5f;
 		[Net, Predicted] public TimeSince TimeSinceVault { get; set; }
 		[Net, Predicted] public Vector3 VaultStart { get; set; }
 		[Net, Predicted] public Vector3 VaultEnd { get; set; }
@@ -48,6 +49,7 @@ namespace Facepunch.Parkour
 		public ParkourDuck Duck { get; private set; }
 		public Unstuck Unstuck { get; private set; }
 
+		private bool _vaultingFromGround;
 		private float _vaultHeight;
 		private float _momentum;
 		private Vector3 _previousVelocity;
@@ -120,6 +122,12 @@ namespace Facepunch.Parkour
 			RestoreGroundPos();
 
 			var vaultTime = MinVaultTime.LerpTo( MaxVaultTime, _vaultHeight / MaxVaultHeight );
+
+			if( !_vaultingFromGround )
+			{
+				vaultTime *= ClimbVaultMultiplier;
+			}
+
 			if ( TimeSinceVault < vaultTime )
 			{
 				Position = Vector3.Lerp( VaultStart, VaultEnd, TimeSinceVault / vaultTime );
@@ -606,6 +614,7 @@ namespace Facepunch.Parkour
 			if ( vaultHeight < StepSize ) return false;
 			if ( vaultHeight > MaxVaultHeight ) return false;
 
+			_vaultingFromGround = GroundEntity != null;
 			_vaultHeight = vaultHeight;
 			TimeSinceVault = 0;
 			VaultStart = Position;
